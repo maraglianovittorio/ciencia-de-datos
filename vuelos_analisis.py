@@ -73,7 +73,22 @@ def clasificar_variables(df, excluir=None):
 
 def cargar_datos(ruta='TPI/Vuelos.xlsx'):
     """Carga el dataset de vuelos desde el archivo Excel."""
-    df = pd.read_excel(ruta)
+    # Soporta ejecución desde raíz del repo o desde la carpeta TPI.
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    rutas_candidatas = [
+        ruta,
+        os.path.join(script_dir, 'Vuelos.xlsx'),
+        os.path.join(script_dir, '..', ruta),
+    ]
+
+    ruta_excel = next((r for r in rutas_candidatas if os.path.exists(r)), None)
+    if ruta_excel is None:
+        raise FileNotFoundError(
+            "No se encontró el archivo Excel. Rutas intentadas: "
+            + ", ".join(rutas_candidatas)
+        )
+
+    df = pd.read_excel(ruta_excel)
     print("=" * 70)
     print("FASE 2: ENTENDIMIENTO DE LOS DATOS")
     print("=" * 70)
@@ -246,6 +261,386 @@ def analisis_proporciones(df, excluir=None):
 
         for categoria, pct in proporciones.items():
             print(f"    {str(categoria):<30} {pct:>6.2f}%")
+
+
+def analisis_demora_por_aeropuerto(df, target='demora', output_dir=OUTPUT_DIR):
+    """
+    Calcula el porcentaje de vuelos demorados por aeropuerto.
+
+    El análisis se adapta a dos esquemas comunes del dataset:
+      1) Una sola columna de aeropuerto.
+      2) Columnas separadas de origen/destino (se unifican en un mismo ranking).
+    """
+    print("\n" + "-" * 70)
+    print("3.5 DEMORAS POR AEROPUERTO")
+    print("-" * 70)
+
+    if target not in df.columns:
+        print(f"\n  [!] No se encontró la variable objetivo '{target}'.")
+        return None
+
+    def _normalizar_columna(nombre):
+        return nombre.lower().strip()
+
+    def _es_demorado(serie):
+        if pd.api.types.is_numeric_dtype(serie):
+            return serie.eq(1)
+
+        texto = serie.astype(str).str.lower().str.strip()
+        valores_true = {'1', 'si', 'sí', 'true', 'demorado', 'delay', 'delayed'}
+        return texto.isin(valores_true)
+
+    # Detecta posibles columnas de aeropuerto evitando hardcodear nombres exactos.
+    candidatas = []
+    nombres_directos = {
+        'aeropuerto', 'origen', 'destino',
+        'origen_iata', 'destino_iata',
+        'airport_origin', 'airport_destination'
+    }
+    for col in df.columns:
+        nombre = _normalizar_columna(col)
+        if not pd.api.types.is_object_dtype(df[col]) and not pd.api.types.is_string_dtype(df[col]):
+            continue
+        if 'aeropuerto' in nombre or nombre in nombres_directos:
+            candidatas.append(col)
+
+    if not candidatas:
+        print("\n  [!] No se detectaron columnas de aeropuerto para calcular el análisis.")
+        return None
+
+    # Si hay varias columnas de aeropuerto (p.ej. origen/destino),
+    # unificamos para obtener un porcentaje por aeropuerto global.
+    if len(candidatas) == 1:
+        largo = df[[candidatas[0], target]].rename(columns={candidatas[0]: 'aeropuerto'})
+    else:
+        largo = df[candidatas + [target]].melt(
+            id_vars=target,
+            value_vars=candidatas,
+            value_name='aeropuerto'
+        )[[target, 'aeropuerto']]
+
+    largo = largo.dropna(subset=['aeropuerto'])
+
+    resumen = (
+        largo.assign(demorado=_es_demorado(largo[target]).astype(int))
+        .groupby('aeropuerto', as_index=False)
+        .agg(
+            total_vuelos=('demorado', 'count'),
+            vuelos_demorados=('demorado', 'sum')
+        )
+    )
+
+    resumen['pct_demorados'] = (resumen['vuelos_demorados'] / resumen['total_vuelos'] * 100).round(2)
+    resumen = resumen.sort_values('pct_demorados', ascending=False)
+
+    if resumen.empty:
+        print("\n  [!] No hay datos válidos para calcular demoras por aeropuerto.")
+        return None
+
+    print(f"\n{'Aeropuerto':<35} {'Demorados':>10} {'Total':>10} {'% Demora':>10}")
+    print("-" * 70)
+    for _, row in resumen.iterrows():
+        print(
+            f"{str(row['aeropuerto']):<35} "
+            f"{int(row['vuelos_demorados']):>10} "
+            f"{int(row['total_vuelos']):>10} "
+            f"{row['pct_demorados']:>9.2f}%"
+        )
+
+    csv_path = f'{output_dir}/demora_por_aeropuerto.csv'
+    resumen.to_csv(csv_path, index=False)
+    print(f"\n   [+] demora_por_aeropuerto.csv")
+
+    fig, ax = plt.subplots(figsize=(11, max(5, len(resumen) * 0.4)))
+    sns.barplot(data=resumen, y='aeropuerto', x='pct_demorados', color='tomato', ax=ax)
+    ax.set_title('Porcentaje de vuelos demorados por aeropuerto', fontweight='bold')
+    ax.set_xlabel('% de vuelos demorados')
+    ax.set_ylabel('Aeropuerto')
+
+    for i, v in enumerate(resumen['pct_demorados']):
+        ax.text(v + 0.2, i, f'{v:.2f}%', va='center', fontsize=9)
+
+    plt.tight_layout()
+    plt.savefig(f'{output_dir}/demora_por_aeropuerto.png', dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"   [+] demora_por_aeropuerto.png")
+
+    return resumen
+
+
+def _detectar_columnas_aeropuerto(df):
+    """Detecta columnas que representan aeropuerto (origen/destino o única)."""
+    candidatas = []
+    nombres_directos = {
+        'aeropuerto', 'origen', 'destino',
+        'origen_iata', 'destino_iata',
+        'airport_origin', 'airport_destination'
+    }
+
+    for col in df.columns:
+        nombre = col.lower().strip()
+        if not pd.api.types.is_object_dtype(df[col]) and not pd.api.types.is_string_dtype(df[col]):
+            continue
+        if 'aeropuerto' in nombre or nombre in nombres_directos:
+            candidatas.append(col)
+
+    return candidatas
+
+
+def _serie_demorada(serie):
+    """Convierte una columna de demora a indicador binario (1=demorado)."""
+    if pd.api.types.is_numeric_dtype(serie):
+        return serie.eq(1).astype(int)
+
+    texto = serie.astype(str).str.lower().str.strip()
+    valores_true = {'1', 'si', 'sí', 'true', 'demorado', 'delay', 'delayed'}
+    return texto.isin(valores_true).astype(int)
+
+
+def _expandir_aeropuertos(df, columnas_aeropuerto, columnas_extra=None):
+    """Pasa de formato ancho a largo para consolidar métricas por aeropuerto."""
+    if columnas_extra is None:
+        columnas_extra = []
+
+    if len(columnas_aeropuerto) == 1:
+        largo = df[[columnas_aeropuerto[0]] + columnas_extra].rename(
+            columns={columnas_aeropuerto[0]: 'aeropuerto'}
+        )
+    else:
+        largo = df[columnas_aeropuerto + columnas_extra].melt(
+            id_vars=columnas_extra,
+            value_vars=columnas_aeropuerto,
+            value_name='aeropuerto'
+        )[columnas_extra + ['aeropuerto']]
+
+    return largo.dropna(subset=['aeropuerto'])
+
+
+def grafico_vuelos_y_demora_por_aeropuerto(df, target='demora', top_n=20, output_dir=OUTPUT_DIR):
+    """
+    Compara cantidad de vuelos y demora por aeropuerto en un mismo gráfico.
+    """
+    print("\n" + "-" * 70)
+    print("3.6 VUELOS Y DEMORA POR AEROPUERTO")
+    print("-" * 70)
+
+    if target not in df.columns:
+        print(f"\n  [!] No se encontró la variable objetivo '{target}'.")
+        return None
+
+    columnas_aeropuerto = _detectar_columnas_aeropuerto(df)
+    if not columnas_aeropuerto:
+        print("\n  [!] No se detectaron columnas de aeropuerto para este análisis.")
+        return None
+
+    largo = _expandir_aeropuertos(df, columnas_aeropuerto, columnas_extra=[target])
+    largo['demorado'] = _serie_demorada(largo[target])
+
+    resumen = (
+        largo.groupby('aeropuerto', as_index=False)
+        .agg(
+            total_vuelos=('aeropuerto', 'count'),
+            pct_demorados=('demorado', lambda x: x.mean() * 100)
+        )
+        .sort_values('total_vuelos', ascending=False)
+    )
+    resumen['pct_demorados'] = resumen['pct_demorados'].round(2)
+
+    if resumen.empty:
+        print("\n  [!] No hay datos válidos para generar el gráfico comparativo.")
+        return None
+
+    top = resumen.head(top_n).sort_values('total_vuelos', ascending=True)
+
+    print(f"\nTop {min(top_n, len(resumen))} aeropuertos por cantidad de vuelos:")
+    print(f"{'Aeropuerto':<15} {'Vuelos':>10} {'% Demora':>12}")
+    print("-" * 40)
+    for _, row in top.sort_values('total_vuelos', ascending=False).iterrows():
+        print(f"{row['aeropuerto']:<15} {int(row['total_vuelos']):>10} {row['pct_demorados']:>11.2f}%")
+
+    top.to_csv(f'{output_dir}/vuelos_y_demora_por_aeropuerto.csv', index=False)
+    print("\n   [+] vuelos_y_demora_por_aeropuerto.csv")
+
+    fig, ax1 = plt.subplots(figsize=(12, max(6, len(top) * 0.45)))
+    ax2 = ax1.twiny()
+
+    ax1.barh(top['aeropuerto'], top['total_vuelos'], color='#4C78A8', alpha=0.85)
+    ax1.set_xlabel('Cantidad de vuelos')
+    ax1.set_ylabel('Aeropuerto')
+
+    ax2.plot(top['pct_demorados'], top['aeropuerto'], color='#E45756', marker='o', linewidth=2)
+    ax2.set_xlabel('% de vuelos demorados')
+
+    ax1.set_title('Aeropuertos: volumen de vuelos vs nivel de demora', fontweight='bold')
+    plt.tight_layout()
+    plt.savefig(f'{output_dir}/vuelos_y_demora_por_aeropuerto.png', dpi=150, bbox_inches='tight')
+    plt.close()
+    print("   [+] vuelos_y_demora_por_aeropuerto.png")
+
+    return resumen
+
+
+def grafico_ocupacion_por_aeropuerto(df, col_ocupacion='ocupacion_vuelo', top_n=20, output_dir=OUTPUT_DIR):
+    """
+    Compara la ocupación promedio de vuelos por aeropuerto.
+    """
+    print("\n" + "-" * 70)
+    print("3.7 OCUPACIÓN PROMEDIO POR AEROPUERTO")
+    print("-" * 70)
+
+    if col_ocupacion not in df.columns:
+        print(f"\n  [!] No se encontró la columna de ocupación '{col_ocupacion}'.")
+        return None
+
+    columnas_aeropuerto = _detectar_columnas_aeropuerto(df)
+    if not columnas_aeropuerto:
+        print("\n  [!] No se detectaron columnas de aeropuerto para este análisis.")
+        return None
+
+    largo = _expandir_aeropuertos(df, columnas_aeropuerto, columnas_extra=[col_ocupacion])
+    largo = largo.dropna(subset=[col_ocupacion])
+
+    resumen = (
+        largo.groupby('aeropuerto', as_index=False)
+        .agg(
+            total_vuelos=('aeropuerto', 'count'),
+            ocupacion_promedio=(col_ocupacion, 'mean')
+        )
+        .sort_values('ocupacion_promedio', ascending=False)
+    )
+
+    if resumen.empty:
+        print("\n  [!] No hay datos válidos para ocupación por aeropuerto.")
+        return None
+
+    top = resumen.head(top_n).sort_values('ocupacion_promedio', ascending=True)
+
+    print(f"\nTop {min(top_n, len(resumen))} aeropuertos por ocupación promedio:")
+    print(f"{'Aeropuerto':<15} {'Ocupación':>12} {'Vuelos':>10}")
+    print("-" * 40)
+    for _, row in top.sort_values('ocupacion_promedio', ascending=False).iterrows():
+        print(f"{row['aeropuerto']:<15} {row['ocupacion_promedio']:>11.2f} {int(row['total_vuelos']):>10}")
+
+    top.to_csv(f'{output_dir}/ocupacion_por_aeropuerto.csv', index=False)
+    print("\n   [+] ocupacion_por_aeropuerto.csv")
+
+    fig, ax = plt.subplots(figsize=(11, max(6, len(top) * 0.45)))
+    bars = ax.barh(top['aeropuerto'], top['ocupacion_promedio'], color='#59A14F', alpha=0.9)
+    ax.set_title('Ocupación promedio por aeropuerto', fontweight='bold')
+    ax.set_xlabel('Ocupación promedio')
+    ax.set_ylabel('Aeropuerto')
+
+    for bar in bars:
+        valor = bar.get_width()
+        ax.text(valor + 0.2, bar.get_y() + bar.get_height() / 2, f'{valor:.1f}', va='center', fontsize=9)
+
+    plt.tight_layout()
+    plt.savefig(f'{output_dir}/ocupacion_por_aeropuerto.png', dpi=150, bbox_inches='tight')
+    plt.close()
+    print("   [+] ocupacion_por_aeropuerto.png")
+
+    return resumen
+
+
+def analisis_horario_ocupacion_demora(
+    df,
+    col_hora='hora_salida_programada',
+    col_ocupacion='ocupacion_vuelo',
+    target='demora',
+    output_dir=OUTPUT_DIR
+):
+    """
+    Analiza si la hora de salida influye en la ocupación o en la demora.
+    """
+    print("\n" + "-" * 70)
+    print("3.8 ANÁLISIS HORARIO: INFLUENCIA EN OCUPACIÓN Y DEMORA")
+    print("-" * 70)
+
+    faltantes = [c for c in [col_hora, col_ocupacion, target] if c not in df.columns]
+    if faltantes:
+        print(f"\n  [!] Faltan columnas para análisis horario: {faltantes}")
+        return None
+
+    base = df[[col_hora, col_ocupacion, target]].copy()
+
+    # Normaliza hora desde distintos formatos (ej. '14:35', '14', datetime, etc.).
+    hora_txt = base[col_hora].astype(str).str.extract(r'(\d{1,2})', expand=False)
+    base['hora'] = pd.to_numeric(hora_txt, errors='coerce')
+    base = base[base['hora'].between(0, 23, inclusive='both')]
+
+    if base.empty:
+        print("\n  [!] No se pudieron interpretar horas válidas (0-23).")
+        return None
+
+    base['demorado'] = _serie_demorada(base[target])
+
+    resumen = (
+        base.groupby('hora', as_index=False)
+        .agg(
+            vuelos=('hora', 'count'),
+            ocupacion_promedio=(col_ocupacion, 'mean'),
+            pct_demorados=('demorado', lambda x: x.mean() * 100)
+        )
+        .sort_values('hora')
+    )
+    resumen['pct_demorados'] = resumen['pct_demorados'].round(2)
+
+    corr_hora_ocup = resumen['hora'].corr(resumen['ocupacion_promedio'])
+    corr_hora_demora = resumen['hora'].corr(resumen['pct_demorados'])
+
+    print(f"\nCorrelación hora vs ocupación promedio: {corr_hora_ocup:.3f}")
+    print(f"Correlación hora vs % de demora:       {corr_hora_demora:.3f}")
+
+    pico_demora = resumen.loc[resumen['pct_demorados'].idxmax()]
+    pico_ocupacion = resumen.loc[resumen['ocupacion_promedio'].idxmax()]
+    print(
+        f"\nHora con mayor demora: {int(pico_demora['hora']):02d}:00 "
+        f"({pico_demora['pct_demorados']:.2f}% de vuelos demorados)"
+    )
+    print(
+        f"Hora con mayor ocupación: {int(pico_ocupacion['hora']):02d}:00 "
+        f"(ocupación promedio {pico_ocupacion['ocupacion_promedio']:.2f})"
+    )
+
+    resumen.to_csv(f'{output_dir}/analisis_horario_ocupacion_demora.csv', index=False)
+    print("\n   [+] analisis_horario_ocupacion_demora.csv")
+
+    fig, ax1 = plt.subplots(figsize=(12, 6))
+    ax2 = ax1.twinx()
+
+    ax1.plot(
+        resumen['hora'],
+        resumen['ocupacion_promedio'],
+        color='#59A14F',
+        marker='o',
+        linewidth=2,
+        label='Ocupación promedio'
+    )
+    ax2.plot(
+        resumen['hora'],
+        resumen['pct_demorados'],
+        color='#E45756',
+        marker='s',
+        linewidth=2,
+        label='% demorados'
+    )
+
+    ax1.set_xlabel('Hora de salida')
+    ax1.set_ylabel('Ocupación promedio', color='#59A14F')
+    ax2.set_ylabel('% de vuelos demorados', color='#E45756')
+    ax1.set_xticks(range(0, 24, 1))
+    ax1.set_title('Influencia del horario en ocupación y demora', fontweight='bold')
+
+    lineas = ax1.get_lines() + ax2.get_lines()
+    etiquetas = [l.get_label() for l in lineas]
+    ax1.legend(lineas, etiquetas, loc='upper left')
+
+    plt.tight_layout()
+    plt.savefig(f'{output_dir}/influencia_horaria_ocupacion_demora.png', dpi=150, bbox_inches='tight')
+    plt.close()
+    print("   [+] influencia_horaria_ocupacion_demora.png")
+
+    return resumen
 
 
 # =============================================================================
@@ -458,6 +853,50 @@ def grafico_categoricas_vs_target(df, target='demora', excluir=None, output_dir=
     print(f"\n   [+] categoricas_vs_{target}.png")
 
 
+def analisis_velocidad_por_avion(df, output_dir=OUTPUT_DIR):
+    """
+    Calcula la velocidad del vuelo y genera gráficos por tipo de avión
+    para detectar valores anómalos.
+    """
+    print("\n" + "-" * 70)
+    print("4.5 ANÁLISIS DE VELOCIDAD DE VUELO POR TIPO DE AVIÓN")
+    print("-" * 70)
+
+    # 1. Crear nueva propiedad: velocidad (km/h)
+    # Suponiendo que distancia está en km y tiempo en minutos
+    df['velocidad_vuelo_kmh'] = (df['distancia_vuelo'] / df['tiempo_estimado_vuelo']) * 60
+
+    # 2. Gráfico combinado (Boxplot) para ver outliers rápidamente
+    fig, ax = plt.subplots(figsize=(12, 8))
+    sns.boxplot(data=df, x='velocidad_vuelo_kmh', y='tipo_avion', ax=ax, palette='Set2')
+    ax.set_title('Distribución de Velocidad de Vuelo por Tipo de Avión', fontweight='bold')
+    ax.set_xlabel('Velocidad (km/h)')
+    ax.set_ylabel('Tipo de Avión')
+    plt.tight_layout()
+    plt.savefig(f'{output_dir}/velocidad_vs_tipo_avion.png', dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"   [+] velocidad_vs_tipo_avion.png")
+
+    # 3. Gráficos individuales por cada tipo de avión
+    tipos_avion = df['tipo_avion'].dropna().unique()
+    for avion in tipos_avion:
+        data_avion = df[df['tipo_avion'] == avion]
+        fig, ax = plt.subplots(1, 2, figsize=(14, 4))
+        
+        sns.histplot(data=data_avion, x='velocidad_vuelo_kmh', ax=ax[0], color="coral", kde=True)
+        ax[0].title.set_text(f"Histograma de Velocidad - {avion}")
+        
+        sns.boxplot(data=data_avion, x='velocidad_vuelo_kmh', ax=ax[1], color="coral")
+        ax[1].title.set_text(f"Boxplot de Velocidad - {avion}")
+        
+        plt.tight_layout()
+        # Reemplazar espacios y caracteres problemáticos
+        nombre_archivo = f"velocidad_{avion.replace(' ', '_').replace('/', '_')}.png"
+        plt.savefig(f'{output_dir}/{nombre_archivo}', dpi=150, bbox_inches='tight')
+        plt.close()
+        print(f"   [+] {nombre_archivo}")
+
+
 # =============================================================================
 # ANÁLISIS MULTIVARIANTE: Matriz de correlación
 # =============================================================================
@@ -465,7 +904,7 @@ def grafico_categoricas_vs_target(df, target='demora', excluir=None, output_dir=
 def matriz_correlacion(df, excluir=None, output_dir=OUTPUT_DIR):
     """Genera la matriz de correlación entre variables numéricas."""
     print("\n" + "-" * 70)
-    print("4.5 MATRIZ DE CORRELACIÓN")
+    print("4.6 MATRIZ DE CORRELACIÓN")
     print("-" * 70)
 
     numericas, _ = clasificar_variables(df, excluir=excluir)
@@ -529,6 +968,15 @@ if __name__ == "__main__":
     # Análisis de proporciones (variables categóricas)
     # =========================================================================
     analisis_proporciones(df, excluir=EXCLUIR)
+    analisis_demora_por_aeropuerto(df, target='demora')
+    grafico_vuelos_y_demora_por_aeropuerto(df, target='demora', top_n=20)
+    grafico_ocupacion_por_aeropuerto(df, col_ocupacion='ocupacion_vuelo', top_n=20)
+    analisis_horario_ocupacion_demora(
+        df,
+        col_hora='hora_salida_programada',
+        col_ocupacion='ocupacion_vuelo',
+        target='demora'
+    )
 
     # =========================================================================
     # FASE 4: Visualizaciones
@@ -543,6 +991,7 @@ if __name__ == "__main__":
     # Extras
     grafico_balance_clases(df)
     grafico_categoricas_vs_target(df, target='demora', excluir=EXCLUIR + ['demora'])
+    analisis_velocidad_por_avion(df)
     matriz_correlacion(df, excluir=EXCLUIR)
 
     # =========================================================================
