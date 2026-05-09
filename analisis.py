@@ -331,28 +331,41 @@ def hora_vs_demora(
     return resumen
 
 
-# ── 6. Demora por aeropuerto ─────────────────────────────────────────────────
+# ── 6. Demora por aeropuerto (desglosada por clima) ──────────────────────────
 
-def demora_por_aeropuerto(df, target='demora', top_n=20, output_dir=OUTPUT_DIR):
+def demora_por_aeropuerto(
+    df,
+    target='demora',
+    col_clima='condiciones_climaticas',
+    top_n=20,
+    output_dir=OUTPUT_DIR
+):
     """
-    Compara volumen de vuelos y tasa de demora por aeropuerto.
+    Tasa de demora por aeropuerto, desglosada por condición climática.
+
+    Cada barra muestra el % de vuelos demorados en ese aeropuerto,
+    y los segmentos de color indican cuánto aporta cada clima a ese %.
     """
     print("\n" + "-" * 70)
-    print("DEMORA POR AEROPUERTO")
+    print("DEMORA POR AEROPUERTO (desglose por clima)")
     print("-" * 70)
 
-    if target not in df.columns:
-        print(f"\n  [!] No se encontró la variable objetivo '{target}'.")
-        return None
+    for col in [target, col_clima]:
+        if col not in df.columns:
+            print(f"\n  [!] No se encontró la columna '{col}'.")
+            return None
 
     columnas_aeropuerto = detectar_columnas_aeropuerto(df)
     if not columnas_aeropuerto:
         print("\n  [!] No se detectaron columnas de aeropuerto.")
         return None
 
-    largo = expandir_aeropuertos(df, columnas_aeropuerto, columnas_extra=[target])
+    largo = expandir_aeropuertos(
+        df, columnas_aeropuerto, columnas_extra=[target, col_clima]
+    )
     largo['demorado'] = serie_demorada(largo[target])
 
+    # Resumen general para ordenar y para la tabla
     resumen = (
         largo.groupby('aeropuerto', as_index=False)
         .agg(
@@ -363,26 +376,86 @@ def demora_por_aeropuerto(df, target='demora', top_n=20, output_dir=OUTPUT_DIR):
     )
     resumen['pct_demorados'] = resumen['pct_demorados'].round(2)
 
-    top = resumen.head(top_n).sort_values('total_vuelos', ascending=True)
+    top_aeropuertos = resumen.head(top_n)['aeropuerto'].tolist()
+    largo_top = largo[largo['aeropuerto'].isin(top_aeropuertos)]
 
-    print(f"\n  Top {min(top_n, len(resumen))} aeropuertos:")
+    # Tabla consola
+    print(f"\n  Top {len(top_aeropuertos)} aeropuertos:")
     print(f"  {'Aeropuerto':<15} {'Vuelos':>10} {'% Demora':>12}")
     print("  " + "-" * 40)
-    for _, row in top.sort_values('total_vuelos', ascending=False).iterrows():
+    for _, row in resumen.head(top_n).iterrows():
         print(f"  {row['aeropuerto']:<15} {int(row['total_vuelos']):>10} "
               f"{row['pct_demorados']:>11.2f}%")
 
-    fig, ax1 = plt.subplots(figsize=(12, max(6, len(top) * 0.45)))
-    ax2 = ax1.twiny()
+    # ── Calcular aporte de cada clima al % de demora por aeropuerto ──
+    # Para cada (aeropuerto, clima): demorados_clima / total_vuelos_aeropuerto * 100
+    clima_demora = (
+        largo_top.groupby(['aeropuerto', col_clima], as_index=False)
+        .agg(demorados_clima=('demorado', 'sum'))
+    )
+    totales = (
+        largo_top.groupby('aeropuerto', as_index=False)
+        .agg(total=('demorado', 'count'))
+    )
+    clima_demora = clima_demora.merge(totales, on='aeropuerto')
+    clima_demora['pct_aporte'] = (
+        clima_demora['demorados_clima'] / clima_demora['total'] * 100
+    ).round(2)
 
-    ax1.barh(top['aeropuerto'], top['total_vuelos'], color='#4C78A8', alpha=0.85)
-    ax1.set_xlabel('Cantidad de vuelos')
-    ax1.set_ylabel('Aeropuerto')
+    # Pivotar: aeropuerto × clima → pct_aporte
+    pivot = clima_demora.pivot(
+        index='aeropuerto', columns=col_clima, values='pct_aporte'
+    ).fillna(0)
 
-    ax2.plot(top['pct_demorados'], top['aeropuerto'], color='#E45756', marker='o', linewidth=2)
-    ax2.set_xlabel('% de vuelos demorados')
+    # Ordenar por total de demora descendente
+    orden_total = resumen.set_index('aeropuerto')['pct_demorados']
+    pivot = pivot.loc[
+        pivot.index.intersection(orden_total.index)
+    ]
+    pivot['_total'] = pivot.sum(axis=1)
+    pivot = pivot.sort_values('_total', ascending=True).drop(columns='_total')
 
-    ax1.set_title('Aeropuertos: volumen vs nivel de demora', fontweight='bold')
+    # ── Gráfico: barras horizontales stacked por clima ──
+    colores_clima = {
+        'Despejado': '#4CAF50',
+        'Nublado': '#78909C',
+        'Lluvia': '#42A5F5',
+        'Tormenta': '#EF5350',
+        'Niebla': '#FFA726',
+    }
+    # Fallback para climas no contemplados
+    palette_extra = ['#AB47BC', '#26A69A', '#8D6E63', '#EC407A']
+    climas = pivot.columns.tolist()
+    colores = []
+    idx_extra = 0
+    for c in climas:
+        if c in colores_clima:
+            colores.append(colores_clima[c])
+        else:
+            colores.append(palette_extra[idx_extra % len(palette_extra)])
+            idx_extra += 1
+
+    fig, ax = plt.subplots(figsize=(13, max(7, len(pivot) * 0.5)))
+
+    left = np.zeros(len(pivot))
+    for clima, color in zip(climas, colores):
+        valores = pivot[clima].values
+        ax.barh(pivot.index, valores, left=left, color=color,
+                label=clima, edgecolor='white', linewidth=0.5)
+        left += valores
+
+    # Etiqueta con % total al final de cada barra
+    for i, aeropuerto in enumerate(pivot.index):
+        total = left[i]
+        ax.text(total + 0.3, i, f'{total:.1f}%', va='center', fontsize=9,
+                fontweight='bold')
+
+    ax.set_xlabel('% de vuelos demorados')
+    ax.set_ylabel('Aeropuerto')
+    ax.set_title('Tasa de demora por aeropuerto (desglose por clima)',
+                 fontweight='bold', fontsize=14)
+    ax.legend(title='Clima', loc='lower right', fontsize=9)
+
     plt.tight_layout()
     plt.savefig(f'{output_dir}/demora_por_aeropuerto.png', dpi=150, bbox_inches='tight')
     plt.close()
