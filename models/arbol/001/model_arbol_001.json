@@ -1,0 +1,33 @@
+{
+  "modelo": "arbol",
+  "nro_vista": "001",
+  "hiperparametros": {
+    "criterion": "gini",
+    "max_depth": 5,
+    "min_samples_leaf": 10,
+    "min_samples_split": 2
+  },
+  "n_features": 198,
+  "n_muestras": 15000,
+  "metricas": {
+    "accuracy": 0.7062222222222222,
+    "precision": 0.5812591508052709,
+    "recall": 0.27704117236566644,
+    "f1": 0.3752362948960302,
+    "auc_roc": 0.6777634913769272
+  },
+  "matriz_confusion": [
+    [
+      2781,
+      286
+    ],
+    [
+      1036,
+      397
+    ]
+  ],
+  "confusion_matrix_labels": [
+    "No Demorado",
+    "Demorado"
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "modelo": "knn",
+  "nro_vista": "003",
+  "k_optimo": 29,
+  "n_features": 23,
+  "n_muestras": 15000,
+  "metricas": {
+    "accuracy": 0.7033333333333334,
+    "precision": 0.595703125,
+    "recall": 0.21284019539427773,
+    "f1": 0.31362467866323906,
+    "auc_roc": 0.6557684383497561
+  },
+  "matriz_confusion": [
+    [
+      2860,
+      207
+    ],
+    [
+      1128,
+      305
+    ]
+  ],
+  "confusion_matrix_labels": [
+    "No Demorado",
+    "Demorado"
+  ]
+}
