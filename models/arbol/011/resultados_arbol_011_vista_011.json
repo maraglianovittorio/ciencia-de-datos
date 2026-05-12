@@ -1,0 +1,53 @@
+{
+  "modelo": "arbol",
+  "nro_modelo": "011",
+  "nro_vista": "011",
+  "metricas": {
+    "accuracy": 0.7098510451871323,
+    "precision": 0.2952755905511811,
+    "recall": 0.48842257597684513,
+    "f1": 0.3680479825517993,
+    "auc_roc": 0.6636253550317309
+  },
+  "matriz_confusion": [
+    [
+      4996,
+      1611
+    ],
+    [
+      707,
+      675
+    ]
+  ],
+  "confusion_matrix_labels": [
+    "No Demorado",
+    "Demorado"
+  ],
+  "classification_report": {
+    "No Demorado": {
+      "precision": 0.8760301595651412,
+      "recall": 0.7561677009232632,
+      "f1-score": 0.811697806661251,
+      "support": 6607.0
+    },
+    "Demorado": {
+      "precision": 0.2952755905511811,
+      "recall": 0.48842257597684513,
+      "f1-score": 0.3680479825517993,
+      "support": 1382.0
+    },
+    "accuracy": 0.7098510451871323,
+    "macro avg": {
+      "precision": 0.5856528750581611,
+      "recall": 0.6222951384500541,
+      "f1-score": 0.5898728946065251,
+      "support": 7989.0
+    },
+    "weighted avg": {
+      "precision": 0.7755666704704743,
+      "recall": 0.7098510451871323,
+      "f1-score": 0.7349517737510918,
+      "support": 7989.0
+    }
+  }
+}

@@ -31,6 +31,7 @@ from sklearn.metrics import (
     confusion_matrix,
     roc_curve,
 )
+from imblearn.under_sampling import RandomUnderSampler
 import joblib
 
 VISTAS_MINABLES_DIR = 'vistas_minables'
@@ -255,14 +256,30 @@ def main():
     print(f"\n  Features (X): {X.shape[1]} columnas")
     print(f"  Target (y): '{TARGET}' → 0={y.eq(0).sum()} | 1={y.eq(1).sum()}")
 
+    ros = RandomUnderSampler(random_state=RANDOM_STATE)
+    original_idx = np.arange(len(X))
+    X_res, y_res = ros.fit_resample(X, y)
+    idx_selected = ros.sample_indices_
+    idx_discarded = np.setdiff1d(original_idx, idx_selected)
+    descartados = df.iloc[idx_discarded].copy()
+    print(f"\n  [INFO] Subsampling: {len(X_res)} muestras balanceadas")
+    print(f"         Muestras descartadas: {len(descartados)}")
+
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=y
+        X_res, y_res, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=y_res
     )
+
+    df_descartados = descartados.drop(columns=[TARGET])
+    y_descartados = descartados[TARGET]
+    X_test_full = pd.concat([X_test, df_descartados], axis=0)
+    y_test_full = pd.concat([y_test, y_descartados], axis=0)
+    print(f"  Test (full):     {X_test_full.shape[0]} muestras (original + discarded)")
+
     print(f"\n  Train: {X_train.shape[0]} muestras")
-    print(f"  Test:  {X_test.shape[0]} muestras")
+    print(f"  Test (subsampled):  {X_test.shape[0]} muestras")
 
     metricas, cm, report, y_pred, y_proba = evaluar_modelo(
-        modelo, X_train, X_test, y_train, y_test, tipo, nro_modelo, nro_vista
+        modelo, X_train, X_test_full, y_train, y_test_full, tipo, nro_modelo, nro_vista
     )
 
     print("\n" + "=" * 70)

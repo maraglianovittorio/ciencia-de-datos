@@ -38,6 +38,7 @@ from sklearn.metrics import (
     classification_report,
     confusion_matrix,
 )
+from imblearn.under_sampling import RandomUnderSampler
 import joblib
 
 VISTA_MINABLE_DIR = 'vistas_minables'
@@ -125,6 +126,14 @@ def cargar_vista_minable(ruta):
     df = pd.read_csv(ruta)
     print(f"[INFO] Vista minable cargada: {df.shape[0]} filas × {df.shape[1]} columnas")
     return df
+
+
+def balancear_dataset(X, y):
+    ros = RandomUnderSampler(random_state=RANDOM_STATE)
+    X_res, y_res = ros.fit_resample(X, y)
+    print(f"[INFO] Dataset balanceado: {len(X_res)} muestras "
+          f"({y_res.sum()} demorados / {(y_res == 0).sum()} no demorados)")
+    return X_res, y_res
 
 
 def separar_features_target(df):
@@ -453,6 +462,7 @@ def main():
     stop_spin()
 
     X, y = separar_features_target(df)
+    X, y = balancear_dataset(X, y)
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=y
