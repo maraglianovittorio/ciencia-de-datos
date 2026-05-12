@@ -1,0 +1,53 @@
+{
+  "modelo": "knn",
+  "nro_modelo": "008",
+  "nro_vista": "008",
+  "metricas": {
+    "accuracy": 0.6809787626962143,
+    "precision": 0.5,
+    "recall": 0.055716353111432707,
+    "f1": 0.10026041666666667,
+    "auc_roc": 0.6214161495253747
+  },
+  "matriz_confusion": [
+    [
+      2873,
+      77
+    ],
+    [
+      1305,
+      77
+    ]
+  ],
+  "confusion_matrix_labels": [
+    "No Demorado",
+    "Demorado"
+  ],
+  "classification_report": {
+    "No Demorado": {
+      "precision": 0.6876495931067497,
+      "recall": 0.9738983050847457,
+      "f1-score": 0.8061167227833894,
+      "support": 2950.0
+    },
+    "Demorado": {
+      "precision": 0.5,
+      "recall": 0.055716353111432707,
+      "f1-score": 0.10026041666666667,
+      "support": 1382.0
+    },
+    "accuracy": 0.6809787626962143,
+    "macro avg": {
+      "precision": 0.5938247965533748,
+      "recall": 0.5148073290980892,
+      "f1-score": 0.453188569725028,
+      "support": 4332.0
+    },
+    "weighted avg": {
+      "precision": 0.6277853877342825,
+      "recall": 0.6809787626962143,
+      "f1-score": 0.5809335706473527,
+      "support": 4332.0
+    }
+  }
+}

@@ -20,6 +20,64 @@ from utils import cargar_datos, clasificar_variables
 VISTAS_MINABLES_DIR = 'vistas_minables'
 os.makedirs(VISTAS_MINABLES_DIR, exist_ok=True)
 
+def crear_franja_horaria(df, col_hora='hora_salida_programada'):
+    """
+    Crea variable de franja horaria basada en hora de salida:
+    - Mañana: 7:00 - 11:00
+    - Mediodía: 11:01 - 15:00
+    - Tarde: 15:01 - 19:00
+    - Noche: 19:01 - 1:00
+    - Madrugada: 1:01 - 7:00
+    """
+    base = df[[col_hora]].copy()
+    hora = (
+        base[col_hora].astype(str)
+        .str.extract(r'(\d{1,2})', expand=False)
+        .astype(float)
+    )
+
+    def clasificar(h):
+        if pd.isna(h):
+            return None
+        h = int(h)
+        if 7 <= h <= 11:
+            return 'manana'
+        elif 12 <= h <= 15:
+            return 'mediodia'
+        elif 16 <= h <= 19:
+            return 'tarde'
+        elif h >= 20 or h == 0:
+            return 'noche'
+        elif 1 <= h <= 6:
+            return 'madrugada'
+        else:
+            return 'noche'
+
+    df['franja_horaria'] = hora.apply(clasificar)
+    return df
+
+
+def crear_timestamp(df, col_hora='hora_salida_programada'):
+    """
+    Convierte la hora de salida en un valor numérico continuo.
+    Representa la hora del día como un número (ej. 14:30 → 14.5).
+    """
+    hora = (
+        df[col_hora].astype(str)
+        .str.extract(r'(\d{1,2})(?::(\d{2}))?', expand=False)
+        .iloc[:, 0]
+        .astype(float)
+    )
+    minutos = (
+        df[col_hora].astype(str)
+        .str.extract(r'\d{1,2}:(\d{2})', expand=False)
+        .astype(float)
+        .fillna(0) / 60
+    )
+    df['timestamp_vuelo'] = hora + minutos
+    return df
+
+
 EXCLUIR = ['id_vuelo', 'hora_salida_programada', 'dia_semana', 'puerta_embarque']
 TARGET = 'demora'
 
@@ -45,6 +103,9 @@ def filtrado_custom(df):
     info['eze_aep'] = (~mask_eze_aep).sum()
 
     df = df[mask_velocidad & mask_eze_aep].reset_index(drop=True)
+
+    df = crear_franja_horaria(df)
+    df = crear_timestamp(df)
 
     info['shape_final'] = df.shape
     total_eliminados = info['shape_inicial'][0] - info['shape_final'][0]
