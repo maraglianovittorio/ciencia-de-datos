@@ -284,6 +284,83 @@ def generar_dashboard_consolidado(df, categorical_cols):
     plt.close()
     print(f"      [OK] Dashboard guardado en: {filename}")
 
+def graficar_comparativa_numericas(df, numeric_cols):
+    """Genera gráficos de distribución (KDE) comparativos para cada variable numérica, incluyendo la media."""
+    print("[3.5/5] Generando graficos de comparacion numerica (distribuciones)...")
+    
+    for col in numeric_cols:
+        print(f"      Graficando variable numerica: {col}...")
+        
+        plt.figure(figsize=(12, 6))
+        
+        # Graficar KDE de cada cluster y poblacion
+        sns.kdeplot(data=df[df['cluster'] == 0], x=col, fill=True, alpha=0.15, color='#4A90E2', label='Cluster 0', linewidth=2)
+        sns.kdeplot(data=df[df['cluster'] == 1], x=col, fill=True, alpha=0.15, color='#FF6B6B', label='Cluster 1', linewidth=2)
+        sns.kdeplot(data=df, x=col, fill=False, color='#95A5A6', label='Poblacion Total', linewidth=2.5, linestyle='--')
+        
+        # Calcular medias
+        mean_c0 = df[df['cluster'] == 0][col].mean()
+        mean_c1 = df[df['cluster'] == 1][col].mean()
+        mean_tot = df[col].mean()
+        
+        # Dibujar lineas verticales de medias
+        plt.axvline(mean_c0, color='#4A90E2', linestyle=':', linewidth=2, label=f'Media Cluster 0: {mean_c0:.2f}')
+        plt.axvline(mean_c1, color='#FF6B6B', linestyle=':', linewidth=2, label=f'Media Cluster 1: {mean_c1:.2f}')
+        plt.axvline(mean_tot, color='#7F8C8D', linestyle='--', linewidth=2, label=f'Media Global: {mean_tot:.2f}')
+        
+        plt.title(f'Distribucion de {col.upper()} por Cluster vs Poblacion Total')
+        plt.xlabel(col)
+        plt.ylabel('Densidad')
+        plt.legend(frameon=True, facecolor='white', framealpha=0.9)
+        plt.tight_layout()
+        
+        filename = f"{OUTPUT_DIR}/comparativa_num_{col}.png"
+        plt.savefig(filename, dpi=150)
+        plt.close()
+        print(f"      [OK] Guardado en: {filename}")
+
+def generar_dashboard_consolidado_numericas(df, numeric_cols):
+    """Genera un único gráfico (dashboard) con subplots de las variables numéricas."""
+    print("[4.5/5] Generando dashboard consolidado de variables numericas...")
+    
+    n_vars = len(numeric_cols)
+    fig, axes = plt.subplots(4, 2, figsize=(18, 20))
+    axes = axes.ravel()
+    
+    for idx, col in enumerate(numeric_cols):
+        # Graficar KDE
+        sns.kdeplot(data=df[df['cluster'] == 0], x=col, fill=True, alpha=0.15, color='#4A90E2', label='Cluster 0', linewidth=2, ax=axes[idx])
+        sns.kdeplot(data=df[df['cluster'] == 1], x=col, fill=True, alpha=0.15, color='#FF6B6B', label='Cluster 1', linewidth=2, ax=axes[idx])
+        sns.kdeplot(data=df, x=col, fill=False, color='#95A5A6', label='Poblacion Total', linewidth=2, linestyle='--', ax=axes[idx])
+        
+        # Calcular medias
+        mean_c0 = df[df['cluster'] == 0][col].mean()
+        mean_c1 = df[df['cluster'] == 1][col].mean()
+        mean_tot = df[col].mean()
+        
+        # Dibujar medias
+        axes[idx].axvline(mean_c0, color='#4A90E2', linestyle=':', linewidth=2, label=f'Media C0: {mean_c0:.1f}')
+        axes[idx].axvline(mean_c1, color='#FF6B6B', linestyle=':', linewidth=2, label=f'Media C1: {mean_c1:.1f}')
+        axes[idx].axvline(mean_tot, color='#7F8C8D', linestyle='--', linewidth=2, label=f'Media Global: {mean_tot:.1f}')
+        
+        axes[idx].set_title(f'Distribucion de {col.upper()}', fontsize=13, weight='bold', pad=10)
+        axes[idx].set_ylabel('Densidad')
+        axes[idx].set_xlabel('')
+        axes[idx].legend(frameon=True, fontsize=10)
+        
+    # El subplot 8 (índice 7) está vacío, lo desactivamos
+    if len(axes) > n_vars:
+        for empty_idx in range(n_vars, len(axes)):
+            axes[empty_idx].axis('off')
+            
+    plt.suptitle('DIFERENCIAS EN DISTRIBUCIONES NUMERICAS ENTRE CLUSTERS VS POBLACION TOTAL', fontsize=18, weight='bold', y=1.01)
+    plt.tight_layout()
+    
+    filename = f"{OUTPUT_DIR}/dashboard_comparativo_numericas.png"
+    plt.savefig(filename, dpi=180, bbox_inches='tight')
+    plt.close()
+    print(f"      [OK] Dashboard numerico guardado en: {filename}")
+
 def guardar_resultados_csv(df):
     """Guarda el dataset con la asignación de clusters a un nuevo archivo CSV."""
     print("[5/5] Guardando resultados en clientes_con_clusters.csv...")
@@ -309,8 +386,14 @@ def main():
         # 4. Generar Gráficos Individuales de Categorías
         graficar_comparativa_categoricas(df, categorical_cols)
         
-        # 5. Generar Dashboard Consolidado
+        # 4b. Generar Gráficos Individuales de Numéricas
+        graficar_comparativa_numericas(df, numeric_cols)
+        
+        # 5. Generar Dashboard Consolidado Categorias
         generar_dashboard_consolidado(df, categorical_cols)
+        
+        # 5b. Generar Dashboard Consolidado Numéricas
+        generar_dashboard_consolidado_numericas(df, numeric_cols)
         
         # 6. Exportar Resultados
         guardar_resultados_csv(df)
@@ -320,9 +403,12 @@ def main():
         print("="*80)
         print(f" Los graficos comparativos se han guardado en: {OUTPUT_DIR}/")
         print(" Archivos generados:")
-        print(f"   - {OUTPUT_DIR}/dashboard_comparativo_categoricas.png  (Dashboard general)")
+        print(f"   - {OUTPUT_DIR}/dashboard_comparativo_categoricas.png  (Dashboard general categorico)")
+        print(f"   - {OUTPUT_DIR}/dashboard_comparativo_numericas.png  (Dashboard general numerico)")
         for col in categorical_cols:
             print(f"   - {OUTPUT_DIR}/comparativa_{col}.png")
+        for col in numeric_cols:
+            print(f"   - {OUTPUT_DIR}/comparativa_num_{col}.png")
         print("   - clientes_con_clusters.csv  (Base de datos con columna 'cluster' asignada)")
         print("="*80)
         
