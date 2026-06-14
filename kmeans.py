@@ -361,6 +361,147 @@ def generar_dashboard_consolidado_numericas(df, numeric_cols):
     plt.close()
     print(f"      [OK] Dashboard numerico guardado en: {filename}")
 
+def graficar_scatterplot_clusters(df, kmeans_model, scaler, numeric_cols):
+    """Genera un scatterplot de los clusters usando las variables originales gasto_acumulado e ingreso_mensual."""
+    print("[SCATTER] Generando scatterplot de clusters (gasto_acumulado vs ingreso_mensual)...")
+    
+    x_col = 'gasto_acumulado'
+    y_col = 'ingreso_mensual'
+    
+    # Obtener centroides en escala original
+    centroids_scaled = kmeans_model.cluster_centers_
+    centroids_original = scaler.inverse_transform(centroids_scaled)
+    
+    # Índices de las columnas en numeric_cols
+    idx_x = numeric_cols.index(x_col)
+    idx_y = numeric_cols.index(y_col)
+    
+    # Etiquetas descriptivas para la leyenda
+    cluster_labels = {0: 'Estándar', 1: 'VIP / Alta Actividad'}
+    
+    fig, ax = plt.subplots(figsize=(14, 9))
+    
+    for cluster_id in sorted(df['cluster'].unique()):
+        mask = df['cluster'] == cluster_id
+        ax.scatter(
+            df.loc[mask, x_col],
+            df.loc[mask, y_col],
+            c=PALETA_CLUSTERS[cluster_id],
+            label=cluster_labels.get(cluster_id, f'Cluster {cluster_id}'),
+            alpha=0.45,
+            s=18,
+            edgecolors='none'
+        )
+    
+    # Dibujar centroides
+    for i in range(len(centroids_original)):
+        ax.scatter(
+            centroids_original[i, idx_x],
+            centroids_original[i, idx_y],
+            c='black',
+            marker='X',
+            s=250,
+            zorder=5,
+            edgecolors='white',
+            linewidths=1.5,
+            label='Centroides' if i == 0 else None
+        )
+    
+    # Líneas de referencia en las medias globales
+    ax.axhline(y=df[y_col].mean(), color='gray', linestyle='--', linewidth=0.8, alpha=0.5)
+    ax.axvline(x=df[x_col].mean(), color='gray', linestyle='--', linewidth=0.8, alpha=0.5)
+    
+    ax.set_xlabel(f'{x_col.replace("_", " ").title()}', fontsize=13)
+    ax.set_ylabel(f'{y_col.replace("_", " ").title()}', fontsize=13)
+    ax.set_title('Clusters de Clientes (K-Means, k=2)', fontsize=16, weight='bold', pad=15)
+    ax.legend(fontsize=12, frameon=True, facecolor='white', framealpha=0.9, loc='upper right')
+    
+    # Zoom: limitar ejes al percentil 99 para enfocar la zona densa
+    ax.set_xlim(0, df[x_col].quantile(0.99) * 1.1)
+    ax.set_ylim(0, df[y_col].quantile(0.99) * 1.1)
+    
+    plt.tight_layout()
+    filename = f"{OUTPUT_DIR}/scatterplot_clusters.png"
+    plt.savefig(filename, dpi=180, bbox_inches='tight')
+    plt.close()
+    print(f"      [OK] Scatterplot guardado en: {filename}")
+
+
+def graficar_histograma_ingreso(df):
+    """Genera un histograma de la variable ingreso_mensual."""
+    print("[HIST] Generando histograma de ingreso mensual...")
+    
+    fig, ax = plt.subplots(figsize=(12, 7))
+    
+    ax.hist(
+        df['ingreso_mensual'],
+        bins=35,
+        color='#4A90E2',
+        edgecolor='white',
+        linewidth=0.8,
+        alpha=0.85
+    )
+    
+    # Líneas de referencia
+    media = df['ingreso_mensual'].mean()
+    mediana = df['ingreso_mensual'].median()
+    ax.axvline(media, color='#FF6B6B', linestyle='--', linewidth=2, label=f'Media: ${media:,.0f}')
+    ax.axvline(mediana, color='#2ECC71', linestyle='-.', linewidth=2, label=f'Mediana: ${mediana:,.0f}')
+    
+    ax.set_xlabel('Ingreso Mensual ($)', fontsize=13)
+    ax.set_ylabel('Cantidad de Clientes', fontsize=13)
+    ax.set_title('Distribución del Ingreso Mensual de Clientes', fontsize=16, weight='bold', pad=15)
+    ax.legend(fontsize=12, frameon=True, facecolor='white', framealpha=0.9)
+    
+    plt.tight_layout()
+    filename = f"{OUTPUT_DIR}/histograma_ingreso_mensual.png"
+    plt.savefig(filename, dpi=180, bbox_inches='tight')
+    plt.close()
+    print(f"      [OK] Histograma guardado en: {filename}")
+
+
+def graficar_boxplot_ingreso(df):
+    """Genera un boxplot de ingreso_mensual para visualizar outliers."""
+    print("[BOXPLOT] Generando boxplot de ingreso mensual...")
+    
+    fig, ax = plt.subplots(figsize=(12, 5))
+    
+    bp = ax.boxplot(
+        df['ingreso_mensual'],
+        vert=False,
+        patch_artist=True,
+        boxprops=dict(facecolor='#4A90E2', alpha=0.6, edgecolor='#2C3E50', linewidth=1.5),
+        whiskerprops=dict(color='#2C3E50', linewidth=1.5),
+        capprops=dict(color='#2C3E50', linewidth=1.5),
+        medianprops=dict(color='#FF6B6B', linewidth=2.5),
+        flierprops=dict(marker='o', markerfacecolor='#FF6B6B', markersize=3, alpha=0.4, linestyle='none')
+    )
+    
+    # Anotar estadísticas clave
+    Q1 = df['ingreso_mensual'].quantile(0.25)
+    Q3 = df['ingreso_mensual'].quantile(0.75)
+    IQR = Q3 - Q1
+    upper_fence = Q3 + 1.5 * IQR
+    n_outliers = (df['ingreso_mensual'] > upper_fence).sum()
+    
+    ax.annotate(
+        f'Q1: ${Q1:,.0f}  |  Q3: ${Q3:,.0f}  |  L\u00edmite IQR: ${upper_fence:,.0f}\n'
+        f'Outliers: {n_outliers} ({n_outliers/len(df)*100:.1f}%)  |  Max: ${df["ingreso_mensual"].max():,.0f}',
+        xy=(0.98, 0.95), xycoords='axes fraction', ha='right', va='top',
+        fontsize=11, bbox=dict(boxstyle='round,pad=0.4', facecolor='white', edgecolor='#cccccc', alpha=0.9)
+    )
+    
+    ax.set_xlabel('Ingreso Mensual ($)', fontsize=13)
+    ax.set_title('Boxplot de Ingreso Mensual — Detecci\u00f3n de Outliers', fontsize=16, weight='bold', pad=15)
+    ax.set_yticks([])
+    
+    plt.tight_layout()
+    filename = f"{OUTPUT_DIR}/boxplot_ingreso_mensual.png"
+    plt.savefig(filename, dpi=180, bbox_inches='tight')
+    plt.close()
+    print(f"      [OK] Boxplot guardado en: {filename}")
+
+
 def guardar_resultados_csv(df):
     """Guarda el dataset con la asignación de clusters a un nuevo archivo CSV."""
     print("[5/5] Guardando resultados en clientes_con_clusters.csv...")
@@ -395,6 +536,15 @@ def main():
         # 5b. Generar Dashboard Consolidado Numéricas
         generar_dashboard_consolidado_numericas(df, numeric_cols)
         
+        # 5c. Scatterplot de Clusters (variables originales)
+        graficar_scatterplot_clusters(df, model, scaler, numeric_cols)
+        
+        # 5d. Histograma de Ingreso Mensual
+        graficar_histograma_ingreso(df)
+        
+        # 5e. Boxplot de Ingreso Mensual (outliers)
+        graficar_boxplot_ingreso(df)
+        
         # 6. Exportar Resultados
         guardar_resultados_csv(df)
         
@@ -405,6 +555,9 @@ def main():
         print(" Archivos generados:")
         print(f"   - {OUTPUT_DIR}/dashboard_comparativo_categoricas.png  (Dashboard general categorico)")
         print(f"   - {OUTPUT_DIR}/dashboard_comparativo_numericas.png  (Dashboard general numerico)")
+        print(f"   - {OUTPUT_DIR}/scatterplot_clusters.png  (Scatterplot de clusters)")
+        print(f"   - {OUTPUT_DIR}/histograma_ingreso_mensual.png  (Histograma ingreso mensual)")
+        print(f"   - {OUTPUT_DIR}/boxplot_ingreso_mensual.png  (Boxplot ingreso mensual)")
         for col in categorical_cols:
             print(f"   - {OUTPUT_DIR}/comparativa_{col}.png")
         for col in numeric_cols:
