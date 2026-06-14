@@ -422,7 +422,7 @@ def main():
     stop_spin()
 
     X, y = separar_features_target(df)
-    X, y = balancear_dataset(X, y)
+    ##X, y = balancear_dataset(X, y)
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=y

@@ -8,20 +8,20 @@
 
 | Hiperparámetro | Valor |
 |----------------|-------|
-| max_depth | 3 |
+| max_depth | 5 |
 | min_samples_split | 2 |
-| min_samples_leaf | 1 |
-| criterion | gini |
+| min_samples_leaf | 10 |
+| criterion | entropy |
 
 ## Métricas
 
 | Métrica   | Valor   |
 |-----------|---------|
-| Accuracy  | 0.6286 |
-| Precision | 0.6784 |
-| Recall    | 0.4884 |
-| F1        | 0.5679 |
-| AUC-ROC   | 0.6725 |
+| Accuracy  | 0.7004 |
+| Precision | 0.5619 |
+| Recall    | 0.2757 |
+| F1        | 0.3699 |
+| AUC-ROC   | 0.6756 |
 
 ## Notas y Anotaciones
 
