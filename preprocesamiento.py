@@ -9,6 +9,7 @@ Variable objetivo: demora (0 = No demorado, 1 = Demorado)
 ================================================================================
 """
 
+import json
 import os
 
 import numpy as np
@@ -19,6 +20,9 @@ from utils import cargar_datos, clasificar_variables
 
 VISTAS_MINABLES_DIR = 'vistas_minables'
 os.makedirs(VISTAS_MINABLES_DIR, exist_ok=True)
+
+LOGISTICA_DIR = os.path.join('models', 'logistica')
+os.makedirs(LOGISTICA_DIR, exist_ok=True)
 
 def crear_franja_horaria(df, col_hora='hora_salida_programada'):
     """
@@ -173,10 +177,15 @@ def limpiar_datos(df):
     return df, info
 
 
-def normalizar_numericas(df):
+def normalizar_numericas(df, scaler=None):
     """
     Aplica normalización Min-Max (0-1) a todas las variables numéricas
     EXCEPTO la variable objetivo.
+
+    Si se pasa un `scaler` preajustado (con `min_` y `scale_`), se reutiliza
+    haciendo solo `transform` (útil para aplicar sobre casos nuevos con los
+    mismos rangos del training).
+    Si `scaler` es None, se ajusta uno nuevo con `fit_transform`.
     """
     print("\n" + "=" * 70)
     print("NORMALIZACIÓN MIN-MAX")
@@ -189,8 +198,11 @@ def normalizar_numericas(df):
         print("  [!] No se encontraron variables numéricas para normalizar.")
         return df, info
 
-    scaler = MinMaxScaler()
-    df[numericas] = scaler.fit_transform(df[numericas])
+    if scaler is None:
+        scaler = MinMaxScaler()
+        df[numericas] = scaler.fit_transform(df[numericas])
+    else:
+        df[numericas] = scaler.transform(df[numericas])
 
     print(f"\n  Variables normalizadas ({len(numericas)}):")
     for col in numericas:
@@ -200,9 +212,15 @@ def normalizar_numericas(df):
     return df, info
 
 
-def aplicar_one_hot_encoding(df):
+def aplicar_one_hot_encoding(df, columnas_esperadas=None):
     """
     Aplica One-Hot Encoding a todas las variables categóricas.
+
+    Si se pasa `columnas_esperadas` (lista de columnas resultantes del
+    one-hot del dataset de training), el resultado se alinea para tener
+    exactamente esas columnas: agrega las faltantes con 0 y reordena.
+    Útil para aplicar OHE sobre casos nuevos y mantener consistencia con
+    el modelo entrenado.
     """
     print("\n" + "=" * 70)
     print("ONE-HOT ENCODING")
@@ -222,6 +240,17 @@ def aplicar_one_hot_encoding(df):
               f"{'...' if len(valores) > 6 else ''}")
 
     df = pd.get_dummies(df, columns=categoricas, drop_first=True, dtype=int)
+
+    if columnas_esperadas is not None:
+        faltantes = [c for c in columnas_esperadas if c not in df.columns]
+        sobrantes = [c for c in df.columns if c not in columnas_esperadas]
+        for c in faltantes:
+            df[c] = 0
+        if sobrantes:
+            df = df.drop(columns=sobrantes)
+        df = df[columnas_esperadas]
+        print(f"\n  [i] Alineado a {len(columnas_esperadas)} columnas esperadas "
+              f"(agregadas={len(faltantes)}, descartadas={len(sobrantes)})")
 
     print(f"\n  Columnas después de OHE: {df.shape[1]}")
     print(f"  Nuevas columnas dummy creadas:")
@@ -359,6 +388,37 @@ def exportar_markdown(df, nro_vista, info_custom, info_limpieza, info_norm, info
     print(f"  [+] vista_{nro_vista}.md")
 
 
+def guardar_artefactos_logistica(df, scaler, nro_vista):
+    """
+    Persiste el scaler (min_/scale_ por variable numérica) y la lista
+    de columnas del one-hot resultantes, para que casos nuevos puedan
+    replicar el preprocesamiento con los mismos rangos y schema.
+    """
+    target_dir = os.path.join(LOGISTICA_DIR, nro_vista)
+    os.makedirs(target_dir, exist_ok=True)
+
+    numericas, _ = clasificar_variables(df, excluir=[TARGET])
+    scaler_payload = {
+        'variables': numericas,
+        'min_': scaler.min_.tolist(),
+        'scale_': scaler.scale_.tolist(),
+        'data_min_': scaler.data_min_.tolist(),
+        'data_max_': scaler.data_max_.tolist(),
+    }
+    with open(os.path.join(target_dir, 'scaler_ranges.json'), 'w', encoding='utf-8') as f:
+        json.dump(scaler_payload, f, indent=2, ensure_ascii=False)
+
+    cols = [c for c in df.columns if c != TARGET]
+    with open(os.path.join(target_dir, 'columnas_esperadas.json'), 'w', encoding='utf-8') as f:
+        json.dump(cols, f, indent=2, ensure_ascii=False)
+
+    print(f"\n  [+] Artefactos guardados en {target_dir}/")
+    print(f"      • scaler_ranges.json ({len(numericas)} variables)")
+    print(f"      • columnas_esperadas.json ({len(cols)} columnas)")
+
+    return target_dir
+
+
 def main():
     print("=" * 70)
     print("PREPROCESAMIENTO PARA KNN")
@@ -382,9 +442,16 @@ def main():
     df = cargar_datos()
     df, info_custom = filtrado_custom(df)
     df, info_limpieza = limpiar_datos(df)
-    df, info_norm = normalizar_numericas(df)
+
+    scaler = MinMaxScaler()
+    numericas, _ = clasificar_variables(df, excluir=[TARGET])
+    scaler.fit(df[numericas])
+    df, info_norm = normalizar_numericas(df, scaler=scaler)
     df, info_ohe = aplicar_one_hot_encoding(df)
     df = exportar_vista_minable(df, nuevo_nro, info_custom, info_limpieza, info_norm, info_ohe)
+
+    if TARGET in df.columns:
+        guardar_artefactos_logistica(df, scaler, nuevo_nro)
 
     print("\n" + "=" * 70)
     print("PREPROCESAMIENTO COMPLETO")
