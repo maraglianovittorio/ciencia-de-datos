@@ -1,0 +1,7 @@
+{
+  "algoritmo": "birch_two_step",
+  "n_clusters": 2,
+  "silhouette": 0.192,
+  "sample_size": 5000,
+  "muestreado": true
+}
