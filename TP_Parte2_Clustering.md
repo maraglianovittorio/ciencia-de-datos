@@ -50,6 +50,8 @@ A continuación se reportan las salidas de cada algoritmo.
 | ingreso_mensual | 4.118,74 | +1.721,21 | 2.001,88 | −395,65 | 2.397,53 |
 | anticipacion_compra_promedio | 16,67 | −3,68 | 21,20 | +0,85 | 20,35 |
 
+**Descripción:** los 2 clusters difieren drásticamente entre sí en TODAS las variables financieras y de actividad. El C0 muestra un perfil "ballena no-whale": duplica los vuelos (+14,32), triplica el gasto (+5.739) y casi cuadruplica las millas (+6.005) respecto de la media poblacional, con ingresos un 72% superiores. El C1 es la masa estándar, ligeramente por debajo de la media en todo. La edad y la anticipación de compra son las únicas variables donde la brecha es leve (edad +2,53 vs −0,58; anticipación −3,68 vs +0,85 días). Es la partición **más contrastada** de las 6 corridas, lo que se refleja en el mayor F (15.721,83) y el mayor Silhouette global (0,3659).
+
 **Distribuciones comparadas (KDE por cluster vs población):**
 
 ![Dashboard numéricas K=2](TPI/graficos/kmeans/k2/dashboard_comparativo_numericas.png)
@@ -79,6 +81,8 @@ A continuación se reportan las salidas de cada algoritmo.
 | ingreso_mensual | 4.023,65 | +1.626,12 | 1.491,95 | −905,58 | 2.633,15 | +235,62 | 2.397,53 |
 | anticipacion_compra_promedio | 16,76 | −3,60 | 27,80 | +7,45 | 15,74 | −4,61 | 20,35 |
 
+**Descripción:** los 3 clusters separan muy bien la edad y la actividad financiera, pero se solapan entre sí en ingresos/millas. El C0 es el núcleo de alto valor (gasto +6.985, millas +8.061, similar al C0 de k=2). El C1 son **jóvenes planificadores** (edad 27,34 — 10 años por debajo de la media — que compran con 27,8 días de anticipación y tienen el ingreso más bajo del estudio). El C2 son **mayores estándar** (44,99 años, +7,37) que vuelan poco pero gastan cerca de la media. El C2 es el más parecido a la media poblacional (todos sus deltas son chicos), por eso el Silhouette cae a 0,1739: haySuperposición sustancial entre C1 y C2 en las variables continuas.
+
 **Distribuciones y Silhouette:**
 
 ![Dashboard numéricas K=3](TPI/graficos/kmeans/k3/dashboard_comparativo_numericas.png)
@@ -106,6 +110,8 @@ A continuación se reportan las salidas de cada algoritmo.
 | ingreso_mensual | 3.217,28 | +819,75 | 2.182,06 | −215,48 | 2.397,53 |
 | anticipacion_compra_promedio | 17,28 | −3,07 | 21,16 | +0,81 | 20,35 |
 
+**Descripción:** muy similar en espíritu al kmeans k=2 (masa estándar vs núcleo alto valor), pero con una diferencia clave: el C0 del jerárquico **concentra millas extremas** (+7.832, el doble que el cluster de kmeans k=2) mientras su gasto (+4.452) es algo menor. El C1 prácticamente no acumula millas (361 — 15% de la media). La separación es marcada pero menos limpia que kmeans: el Silhouette de C0 es −0,0005 (prácticamente pegado al límite), lo que indica que muchos clientes del C0 están en la frontera con C1. F = 12.512,55.
+
 **Distribuciones y Silhouette:**
 
 ![Dashboard numéricas Jerárquico K=2](TPI/graficos/jerarquico/k2/dashboard_comparativo_numericas.png)
@@ -132,6 +138,8 @@ A continuación se reportan las salidas de cada algoritmo.
 | cantidad_millas | 361,25 | −2.058,65 | 16.186,07 | +13.766,17 | 3,39 | −2.416,51 | 2.419,91 |
 | ingreso_mensual | 2.182,06 | −215,48 | 2.775,68 | +378,15 | 3.979,91 | +1.582,38 | 2.397,53 |
 | anticipacion_compra_promedio | 21,16 | +0,81 | 17,20 | −3,15 | 17,42 | −2,93 | 20,35 |
+
+**Descripción:** jerárquico k=3 produce tres clusters muy "temáticos": C0 = masa estándar (35.491, muy parecida a la media pero con millas muy bajas), C1 = "frecuentes con millas" (cant_vuelos +7,91 y millas +13.766 — **6,7× la media**), y C2 = núcleo premium (gasto +8.944 e ingreso +1.582). El detalle singular: el C2 casi no acumula millas (3,39 vs 2.420 de media) — parece un grupo de **alto gasto puntual pero baja fidelidad**, lo cual es comercialmente interpretable. Es la segunda mejor combinación (F=15.714,59, sil=0,3062) y, a diferencia de kmeans k=3, los tres clusters están bien definidos en sus variables clave.
 
 **Distribuciones y Silhouette:**
 
@@ -164,6 +172,8 @@ A continuación se reportan las salidas de cada algoritmo.
 | ingreso_mensual | 3.082,54 | +685,01 | 2.188,50 | −209,03 | 2.397,53 |
 | anticipacion_compra_promedio | 17,08 | −3,27 | 21,35 | +1,00 | 20,35 |
 
+**Descripción:** mismo patrón que kmeans k=2 (núcleo alto valor vs masa estándar) pero con separación **más tenue**. El C0 es algo más grande (n=10.479 vs 8.377) y "capta" clientes menos extremos: sus deltas son menores en gasto (+3.767 vs +5.739 de kmeans) e ingreso (+685 vs +1.721). El C1 es prácticamente idéntico al kmeans. Como Birch trabaja en el espacio mixto con OHE de 6 categorías, las dummies suavizan las distancias frente a las 6 numéricas. Resultado: menor Silhouette global (0,1920), el C0 incluso queda en Silhouette negativo (−0,0109), y la F más baja de las 6 corridas (10.433,90).
+
 **Distribuciones y Silhouette:**
 
 ![Dashboard numéricas Bietápico K=2](TPI/graficos/bietapico/k2/dashboard_comparativo_numericas.png)
@@ -190,6 +200,8 @@ A continuación se reportan las salidas de cada algoritmo.
 | cantidad_millas | 230,34 | −2.189,56 | 14.672,51 | +12.252,61 | 3,82 | −2.416,09 | 2.419,91 |
 | ingreso_mensual | 2.188,50 | −209,03 | 2.727,30 | +329,77 | 3.753,64 | +1.356,11 | 2.397,53 |
 | anticipacion_compra_promedio | 21,35 | +1,00 | 18,56 | −1,79 | 14,29 | −6,06 | 20,35 |
+
+**Descripción:** replica casi exactamente la estructura de jerárquico k=3 (masa estándar + millas-altas + premium-sin-millas). El C0 (76,6%) es idéntico al C1 de jerárquico k=2 — la masa estándar. El C1 (15,3%) acumula millas altísimas (+12.253, indicando "frecuentes con programa de millas"). El C2 (8,1%) es el núcleo premium: gasto +8.387 e ingreso +1.356, pero con una anomalía interesante — casi 0 millas (3,82) y la menor anticipación de compra (14,29 días, −6,06). La separación entre los dos grupos minoritarios es clara, pero como Birch mezcla numéricas+OHE, los Silhouettes individuales son bajos (máx 0,22) y el global es el peor de las 6 corridas (0,1895). F = 12.792,98 (penúltimo).
 
 **Distribuciones y Silhouette:**
 
