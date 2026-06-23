@@ -1,0 +1,11 @@
+{
+  "algoritmo": "kmeans",
+  "n_clusters": 2,
+  "silhouette": 0.3659,
+  "sample_size": 5000,
+  "muestreado": true,
+  "silhouette_por_cluster": {
+    "0": 0.0393,
+    "1": 0.4378
+  }
+}

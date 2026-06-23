@@ -1,0 +1,18 @@
+{
+  "algoritmo": "bietapico",
+  "k": 3,
+  "silhouette_global": 0.1895,
+  "silhouette_por_cluster": {
+    "0": 0.22,
+    "1": 0.0713,
+    "2": 0.1143
+  },
+  "silhouette_sample_size": 5000,
+  "separacion_medias_F": 12792.9775,
+  "tamanios": {
+    "0": 34341,
+    "1": 6852,
+    "2": 3627
+  },
+  "n_total": 44820
+}

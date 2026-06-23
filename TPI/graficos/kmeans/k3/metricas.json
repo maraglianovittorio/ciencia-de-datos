@@ -1,0 +1,18 @@
+{
+  "algoritmo": "kmeans",
+  "k": 3,
+  "silhouette_global": 0.1739,
+  "silhouette_por_cluster": {
+    "0": 0.0231,
+    "1": 0.2125,
+    "2": 0.1855
+  },
+  "silhouette_sample_size": 5000,
+  "separacion_medias_F": 12538.282,
+  "tamanios": {
+    "0": 6048,
+    "1": 16623,
+    "2": 22149
+  },
+  "n_total": 44820
+}

@@ -1,0 +1,18 @@
+{
+  "algoritmo": "jerarquico",
+  "k": 3,
+  "silhouette_global": 0.3062,
+  "silhouette_por_cluster": {
+    "0": 0.3485,
+    "1": 0.1068,
+    "2": 0.1975
+  },
+  "silhouette_sample_size": 5000,
+  "separacion_medias_F": 15714.5917,
+  "tamanios": {
+    "0": 35491,
+    "1": 5908,
+    "2": 3421
+  },
+  "n_total": 44820
+}

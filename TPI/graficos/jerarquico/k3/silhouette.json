@@ -1,0 +1,12 @@
+{
+  "algoritmo": "jerarquico",
+  "n_clusters": 3,
+  "silhouette": 0.3062,
+  "sample_size": 5000,
+  "muestreado": true,
+  "silhouette_por_cluster": {
+    "0": 0.3485,
+    "1": 0.1068,
+    "2": 0.1975
+  }
+}
